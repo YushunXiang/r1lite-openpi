@@ -8,6 +8,9 @@ from typing import Literal, Protocol, SupportsIndex, TypeVar
 import jax
 import jax.numpy as jnp
 import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
+import os
+from pathlib import Path
+
 import numpy as np
 import torch
 
@@ -127,6 +130,12 @@ class FakeDataset(Dataset):
         return self._num_samples
 
 
+def _resolve_local_dataset_root() -> Path | None:
+    """Return an explicit local LeRobot root when configured."""
+    root = os.environ.get("OPENPI_LOCAL_DATASET_ROOT")
+    return Path(root).expanduser().resolve() if root else None
+
+
 def create_torch_dataset(
     data_config: _config.DataConfig, action_horizon: int, model_config: _model.BaseModelConfig
 ) -> Dataset:
@@ -137,9 +146,14 @@ def create_torch_dataset(
     if repo_id == "fake":
         return FakeDataset(model_config, num_samples=1024)
 
-    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id)
+    dataset_root = _resolve_local_dataset_root()
+    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(
+        repo_id, root=dataset_root
+    )
     dataset = lerobot_dataset.LeRobotDataset(
         data_config.repo_id,
+        root=dataset_root,
+        video_backend="pyav",
         delta_timestamps={
             key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
         },

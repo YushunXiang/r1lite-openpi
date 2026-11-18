@@ -987,3 +987,72 @@ def get_config(config_name: str) -> TrainConfig:
         raise ValueError(f"Config '{config_name}' not found.{closest_str}")
 
     return _CONFIGS_DICT[config_name]
+# R1 Lite LeRobot v2.1 configuration for the 2026-10-22 three-camera dataset.
+from openpi.policies import r1lite_policy as _r1lite_policy
+
+_R1LITE_REPO_ID = "r1lite_20261022_current3cam"
+
+_CONFIGS.append(
+    TrainConfig(
+        name="pi0_r1lite",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi0_base/params"
+        ),
+        data=SimpleDataConfig(
+            repo_id=_R1LITE_REPO_ID,
+            base_config=DataConfig(
+                repack_transforms=_transforms.Group(
+                    inputs=[
+                        _transforms.RepackTransform(
+                            {
+                                "observation/image": "observation.images.base_0_rgb",
+                                "observation/left_wrist_image": (
+                                    "observation.images.left_wrist_0_rgb"
+                                ),
+                                "observation/right_wrist_image": (
+                                    "observation.images.right_wrist_0_rgb"
+                                ),
+                                "observation/state": "observation.state",
+                                "prompt": "prompt",
+                                "actions": "action",
+                            }
+                        )
+                    ]
+                ),
+                action_sequence_keys=("action",),
+                prompt_from_task=True,
+            ),
+            data_transforms=lambda model_config: _transforms.Group(
+                inputs=[
+                    _r1lite_policy.R1LiteInputs(
+                        model_type=model_config.model_type
+                    )
+                ],
+                outputs=[_r1lite_policy.R1LiteOutputs()],
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        batch_size=1,
+        num_train_steps=2,
+        num_workers=0,
+        assets_base_dir=(
+            "/inspire/hdd/project/robot-reasoning/czxs253130583/"
+            "openpi_r1lite_assets"
+        ),
+        checkpoint_base_dir=(
+            "/inspire/hdd/project/robot-reasoning/czxs253130583/"
+            "openpi_r1lite_checkpoints"
+        ),
+        wandb_enabled=False,
+    )
+)
+
+_CONFIGS_DICT = {config.name: config for config in _CONFIGS}
